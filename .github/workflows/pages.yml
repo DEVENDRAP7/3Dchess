@@ -4,7 +4,11 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # The repository started out empty, so the development branch is currently
+    # the default. Both are listed so the site deploys either way.
+    branches:
+      - main
+      - claude/3d-mobile-chess-game-bspepc
   workflow_dispatch:
 
 permissions:
