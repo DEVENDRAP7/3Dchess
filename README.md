@@ -51,11 +51,12 @@ and computer games are unaffected.
 
 The repository *is* the site. Nothing needs compiling.
 
-1. Push to `main`.
-2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+**One manual step is required, and only once:** in **Settings → Pages**, set
+**Source** to **GitHub Actions**. The workflow token is not permitted to turn
+Pages on by itself, so the first run fails until you do this.
 
-The included workflow (`.github/workflows/pages.yml`) publishes on every push.
-The site then lives at `https://<user>.github.io/<repo>/`.
+After that, `.github/workflows/pages.yml` publishes on every push and the site
+lives at `https://<user>.github.io/<repo>/`.
 
 To run it locally, serve the folder over HTTP — ES modules and the AI worker
 won't load from `file://`:
