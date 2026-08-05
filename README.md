@@ -23,7 +23,11 @@ room code and play them over the internet.
 
 Undo, a hint, the move list (with PGN/FEN export), sound, board themes,
 graphics quality and animation speed all live in the HUD and the settings
-panel. Games against the computer and pass-and-play games save themselves, so
+panel. Five board themes ship: **Classic** and **Marble** are daylit with a
+black-and-white board, **Solstice**, **Obsidian** and **Verdant** play at
+night. The interface follows the board — a bright theme switches the whole UI
+to a light palette, and the effects system swaps from additive to normal
+blending so sparks stay visible against pale colours. Games against the computer and pass-and-play games save themselves, so
 closing the tab doesn't lose your position.
 
 ### Playing a friend online

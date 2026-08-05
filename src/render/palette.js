@@ -39,7 +39,41 @@ export const PALETTE = {
   },
 };
 
+/**
+ * Board and environment themes.
+ *
+ * `bright` themes light the scene like a daylit room rather than a hall at
+ * night: the renderer raises ambient light, the particle system switches from
+ * additive to normal blending so effects stay visible against pale colours,
+ * and the interface swaps to a light palette.
+ */
 export const BOARD_THEMES = {
+  classic: {
+    label: 'Classic',
+    bright: true,
+    light: 0xf4f2ec,      // white squares
+    dark: 0x33353a,       // black squares
+    frame: 0xa9835a,      // warm wood surround
+    frameTrim: 0x6d4f30,
+    ground: 0xd5d9e2,
+    fog: 0xe8ecf4,
+    sky: 0xeef2f9,
+    keyLight: 0xfff8ec,
+    fillLight: 0xc8d8ff,
+  },
+  marble: {
+    label: 'Marble',
+    bright: true,
+    light: 0xf6f4ef,
+    dark: 0x59606e,
+    frame: 0xdad5c9,
+    frameTrim: 0x9c8b6d,
+    ground: 0xe3e6ec,
+    fog: 0xeef1f6,
+    sky: 0xf3f6fb,
+    keyLight: 0xffffff,
+    fillLight: 0xd2e0ff,
+  },
   solstice: {
     label: 'Solstice',
     light: 0xe8dcc0,

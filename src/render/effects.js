@@ -37,6 +37,7 @@ export class Effects {
     this.positions = new Float32Array(PARTICLE_CAPACITY * 3);
     this.colors = new Float32Array(PARTICLE_CAPACITY * 3);
     this.sizes = new Float32Array(PARTICLE_CAPACITY);
+    this.fades = new Float32Array(PARTICLE_CAPACITY);
     this.velocities = new Float32Array(PARTICLE_CAPACITY * 3);
     this.life = new Float32Array(PARTICLE_CAPACITY);
     this.maxLife = new Float32Array(PARTICLE_CAPACITY);
@@ -50,27 +51,41 @@ export class Effects {
     geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
     geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+    geometry.setAttribute('fade', new THREE.BufferAttribute(this.fades, 1));
     geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 40);
 
-    // A hand-rolled point material so each particle can carry its own size.
+    // A hand-rolled point material: each particle carries its own size and its
+    // own fade, so the same buffer works whether we are adding light to a dark
+    // scene or laying opaque sparks over a bright one.
     const material = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: makeSpriteTexture() }, uScale: { value: 1 } },
+      uniforms: {
+        uMap: { value: makeSpriteTexture() },
+        uScale: { value: 1 },
+        uAdditive: { value: 1 },
+      },
       vertexShader: `
         attribute float size;
+        attribute float fade;
         varying vec3 vColor;
+        varying float vFade;
         uniform float uScale;
         void main() {
           vColor = color;
+          vFade = fade;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = size * uScale * (300.0 / max(-mv.z, 0.001));
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
         uniform sampler2D uMap;
+        uniform float uAdditive;
         varying vec3 vColor;
+        varying float vFade;
         void main() {
           vec4 tex = texture2D(uMap, gl_PointCoord);
-          gl_FragColor = vec4(vColor, 1.0) * tex;
+          // Additive fades by dimming; normal blending fades by going clear.
+          vec3 rgb = mix(vColor, vColor * vFade, uAdditive);
+          gl_FragColor = vec4(rgb, vFade) * tex;
           if (gl_FragColor.a < 0.01) discard;
         }`,
       transparent: true,
@@ -88,6 +103,8 @@ export class Effects {
     this.ringGeometry = new THREE.RingGeometry(0.62, 0.78, 40);
     this.rings = [];
     this.ringPool = [];
+    this.blendedMaterials = [material];
+    this.bright = false;
 
     // --- impact flashes ---------------------------------------------------
     this.flashGeometry = new THREE.PlaneGeometry(1, 1);
@@ -99,6 +116,7 @@ export class Effects {
 
   /** Slow motes drifting over the board, purely for atmosphere. */
   _ambient() {
+    this.ambientColor = this.ambientColor || 0x8fa7ff;
     for (let i = 0; i < 90; i++) {
       this.spawn({
         x: (Math.random() - 0.5) * 13,
@@ -107,7 +125,7 @@ export class Effects {
         vx: (Math.random() - 0.5) * 0.05,
         vy: 0.02 + Math.random() * 0.05,
         vz: (Math.random() - 0.5) * 0.05,
-        color: 0x8fa7ff,
+        color: this.ambientColor,
         size: 0.03 + Math.random() * 0.04,
         life: 8 + Math.random() * 8,
         gravity: 0,
@@ -231,6 +249,7 @@ export class Effects {
       }));
       ring.rotation.x = -Math.PI / 2;
       ring.renderOrder = 4;
+      this._register(ring.material);
       this.scene.add(ring);
     }
     ring.visible = true;
@@ -263,6 +282,7 @@ export class Effects {
         toneMapped: false, map: this.points.material.uniforms.uMap.value,
       }));
       flash.renderOrder = 6;
+      this._register(flash.material);
       this.scene.add(flash);
     }
     flash.visible = true;
@@ -273,6 +293,28 @@ export class Effects {
     flash.scale.setScalar(size * 0.4);
     this.flashes.push({ mesh: flash, t: 0, life: options.life || 0.35, size });
     return flash;
+  }
+
+  _register(material) {
+    material.blending = this.bright ? THREE.NormalBlending : THREE.AdditiveBlending;
+    this.blendedMaterials.push(material);
+    return material;
+  }
+
+  /**
+   * Additive blending is invisible against a pale board, so bright themes get
+   * ordinary alpha blending instead.
+   */
+  setBright(bright) {
+    if (this.bright === bright) return;
+    this.bright = bright;
+    const blending = bright ? THREE.NormalBlending : THREE.AdditiveBlending;
+    for (const material of this.blendedMaterials) {
+      material.blending = blending;
+      material.needsUpdate = true;
+    }
+    this.points.material.uniforms.uAdditive.value = bright ? 0 : 1;
+    this.ambientColor = bright ? 0x7d8aa8 : 0x8fa7ff;
   }
 
   /** Adds camera trauma; the scene squares it for a punchy falloff. */
@@ -286,9 +328,9 @@ export class Effects {
     // Particles
     const pos = this.positions, vel = this.velocities, col = this.colors, size = this.sizes;
     for (let i = 0; i < PARTICLE_CAPACITY; i++) {
-      if (this.life[i] <= 0) { size[i] = 0; continue; }
+      if (this.life[i] <= 0) { size[i] = 0; this.fades[i] = 0; continue; }
       this.life[i] -= dt;
-      if (this.life[i] <= 0) { size[i] = 0; continue; }
+      if (this.life[i] <= 0) { size[i] = 0; this.fades[i] = 0; continue; }
 
       const i3 = i * 3;
       const damping = Math.max(0, 1 - this.drag[i] * dt);
@@ -306,15 +348,16 @@ export class Effects {
       }
 
       const k = this.life[i] / this.maxLife[i];
-      const fade = k * k;
-      col[i3] = this.baseColor[i3] * fade;
-      col[i3 + 1] = this.baseColor[i3 + 1] * fade;
-      col[i3 + 2] = this.baseColor[i3 + 2] * fade;
+      col[i3] = this.baseColor[i3];
+      col[i3 + 1] = this.baseColor[i3 + 1];
+      col[i3 + 2] = this.baseColor[i3 + 2];
+      this.fades[i] = k * k;
       size[i] = this.baseSize[i] * (0.35 + k * 0.65);
     }
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
     this.points.geometry.attributes.size.needsUpdate = true;
+    this.points.geometry.attributes.fade.needsUpdate = true;
 
     // Top the ambient motes back up as they expire.
     this.ambientTimer -= dt;
@@ -327,7 +370,7 @@ export class Effects {
         vx: (Math.random() - 0.5) * 0.05,
         vy: 0.06 + Math.random() * 0.08,
         vz: (Math.random() - 0.5) * 0.05,
-        color: 0x8fa7ff,
+        color: this.ambientColor,
         size: 0.03 + Math.random() * 0.04,
         life: 9 + Math.random() * 6,
         gravity: 0,

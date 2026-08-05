@@ -33,10 +33,11 @@ export function createBoard(theme, materials) {
   const rig = new Rig();
 
   // Playing surface — light and dark squares merge into one mesh each.
+  // Squares are a full unit wide so they meet edge to edge with no seam.
   for (let rank = 0; rank < 8; rank++) {
     for (let file = 0; file < 8; file++) {
       const light = (file + rank) % 2 === 1;
-      rig.add(G.box(0.98, 0.10, 0.98), light ? theme.light : theme.dark, FINISH.MATTE,
+      rig.add(G.box(1, 0.10, 1), light ? theme.light : theme.dark, FINISH.MATTE,
         { p: [file - 3.5, -0.05, 3.5 - rank] });
     }
   }
@@ -54,9 +55,19 @@ export function createBoard(theme, materials) {
   ]) {
     rig.add(G.box(sx, 0.16, sz), theme.frame, FINISH.MATTE, { p: [px, -0.03, pz] });
   }
-  // Inner lip and outer bead in polished metal
-  rig.add(G.box(8.14, 0.045, 8.14), theme.frameTrim, FINISH.METAL, { p: [0, 0.048, 0] });
-  rig.add(G.box(8.0, 0.08, 8.0), theme.frame, FINISH.MATTE, { p: [0, 0.05, 0] });
+  // Inner bead: four thin bars framing the squares. This has to be a ring, not
+  // a panel — a solid box here would sit on top of the board and hide it.
+  const bead = 4.055;
+  for (const [px, pz, sx, sz] of [
+    [0, bead, 8.19, 0.11],
+    [0, -bead, 8.19, 0.11],
+    [bead, 0, 0.11, 8.19],
+    [-bead, 0, 0.11, 8.19],
+  ]) {
+    rig.add(G.box(sx, 0.055, sz), theme.frameTrim, FINISH.METAL, { p: [px, 0.026, pz] });
+  }
+
+  // Outer bead and the slab the whole board rests on
   rig.add(G.box(9.68, 0.03, 9.68), theme.frameTrim, FINISH.METAL, { p: [0, -0.10, 0] });
   rig.add(G.box(9.56, 0.20, 9.56), theme.frame, FINISH.MATTE, { p: [0, -0.19, 0] });
 

@@ -34,7 +34,7 @@ const DEFAULT_SETTINGS = {
   sound: true,
   hints: true,
   autoCam: true,
-  theme: 'solstice',
+  theme: 'classic',
   quality: 'auto',
   speed: 1,
 };
@@ -72,7 +72,7 @@ class Chessforge {
     };
 
     await progress(12, 'Raising the board…');
-    const theme = BOARD_THEMES[this.settings.theme] || BOARD_THEMES.solstice;
+    const theme = BOARD_THEMES[this.settings.theme] || BOARD_THEMES.classic;
     this.stage = new Stage($('stage'), theme);
     if (this.settings.quality !== 'auto') {
       this.stage.autoQuality = false;
@@ -83,12 +83,15 @@ class Chessforge {
     this.board = createBoard(theme, this.materials);
     this.stage.scene.add(this.board.root);
     this.markers = new Markers(this.stage.scene);
+    this.stage.applyTheme(theme);
+    document.documentElement.dataset.ui = theme.bright ? 'light' : 'dark';
 
     await progress(38, 'Forging the Dawn Legion…');
     this.prototypes = buildPrototypes(this.materials);
 
     await progress(72, 'Summoning the Umbral Court…');
     this.effects = new Effects(this.stage.scene);
+    this.effects.setBright(!!theme.bright);
     this.animator = new Animator(this.effects, this.sfx);
     this.pieceGroup = new THREE.Group();
     this.stage.scene.add(this.pieceGroup);
@@ -337,6 +340,9 @@ class Chessforge {
   _applyTheme() {
     const theme = BOARD_THEMES[this.settings.theme];
     this.stage.applyTheme(theme);
+    this.effects?.setBright(!!theme.bright);
+    // Panels sit over the board, so the interface follows the board's mood.
+    document.documentElement.dataset.ui = theme.bright ? 'light' : 'dark';
     this.stage.scene.remove(this.board.root);
     // The board owns its geometry and its lettering texture, unlike the pieces.
     disposeTree(this.board.root);

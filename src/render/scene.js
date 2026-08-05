@@ -119,6 +119,19 @@ export class Stage {
     this.hemi.groundColor.setHex(theme.ground);
     this.key.color.setHex(theme.keyLight);
     this.fill.color.setHex(theme.fillLight);
+
+    // A daylit board needs flat, generous light; a night board wants contrast
+    // and the coloured pools over each army's home rank.
+    const bright = !!theme.bright;
+    this.hemi.intensity = bright ? 1.25 : 0.85;
+    this.ambient.intensity = bright ? 0.75 : 0.42;
+    this.key.intensity = bright ? 2.2 : 2.7;
+    this.fill.intensity = bright ? 0.55 : 0.8;
+    this.whiteGlow.intensity = bright ? 3 : 18;
+    this.blackGlow.intensity = bright ? 3 : 18;
+    this.scene.fog.near = bright ? 22 : 16;
+    this.scene.fog.far = bright ? 70 : 46;
+    this.renderer.toneMappingExposure = bright ? 0.98 : 1.08;
   }
 
   setQuality(name) {
@@ -158,7 +171,7 @@ export class Stage {
     // theta 0 puts the camera at +Z, which is behind White's home rank.
     this.desired.theta = color === 'w' ? 0 : Math.PI;
     this.desired.phi = this.portrait ? 0.58 : 0.80;
-    this.desired.radius = this.portrait ? 15.2 : 12.6;
+    this.desired.radius = this.portrait ? 17.0 : 13.2;
     if (immediate) {
       this.spherical.theta = this.desired.theta;
       this.spherical.phi = this.desired.phi;

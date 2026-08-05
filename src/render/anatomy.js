@@ -116,6 +116,11 @@ export function torsoPlate(rig, pal, s, options = {}) {
   rig.add(blob(0.06 * H, 0.19 * H, 0.21 * H), chest, T, { p: [0, s.chest - 0.01 * H, 0.012 * H] });
   rig.add(G.torus(0.10 * H, 0.014 * H, 14), pal.trim, T,
     { p: [0, s.waist - 0.01 * H, 0], r: [Math.PI / 2, 0, 0] });
+  // Fluting: shallow ribs either side of the centre keel
+  for (const side of [1, -1]) {
+    rig.add(G.box(0.014 * H, 0.16 * H, 0.02 * H), pal.trim, T,
+      { p: [side * 0.06 * H, s.chest - 0.01 * H, 0.096 * H], r: [0, 0, side * 0.1] });
+  }
 
   // Faulds — the flared skirt of overlapping lames
   rig.add(G.cyl(0.10 * H, 0.152 * H, 0.10 * H, 14), chest, T, { p: [0, s.hip + 0.035 * H, 0] });
@@ -148,6 +153,11 @@ export function pauldrons(rig, pal, s, options = {}) {
     }
     rig.add(G.torus(0.072 * H, 0.011 * H, 12), pal.trim, T,
       { p: [x, s.shoulder + 0.022 * H, 0], r: [0.2, 0, side * 0.5] });
+    // Rivets along the leading edge
+    for (let i = -1; i <= 1; i++) {
+      rig.add(G.sphere(0.011 * H, 6, 5), pal.trim, T,
+        { p: [x + side * 0.052 * H, s.shoulder + 0.01 * H + i * 0.035 * H, 0.058 * H] });
+    }
   }
 }
 
@@ -212,17 +222,39 @@ export function neckAndHead(rig, pal, s, options = {}) {
     { p: [0, s.headY, 0], s: [1, 1.09, 1.02] });
 }
 
-/** Eyes, set into the face so they read from a distance. */
+/**
+ * A face: brow, eye sockets, eyes with a dark rim so they don't read as bare
+ * dots, a nose, and an optional mouth line. Small features, but they are what
+ * turn a sphere into a person.
+ */
 export function face(rig, pal, s, options = {}) {
   const H = s.H;
+  const r = P.headR * H;
   const y = options.y === undefined ? s.headY + 0.012 * H : options.y;
-  const z = options.z === undefined ? P.headR * H * 0.88 : options.z;
+  const z = options.z === undefined ? r * 0.86 : options.z;
   const spread = options.spread === undefined ? 0.036 * H : options.spread;
-  const size = options.size === undefined ? 0.016 * H : options.size;
-  rig.add(G.sphere(size, 8, 6), pal.eye, E, { p: [spread, y, z] });
-  rig.add(G.sphere(size, 8, 6), pal.eye, E, { p: [-spread, y, z] });
+  const size = options.size === undefined ? 0.015 * H : options.size;
+
+  for (const side of [1, -1]) {
+    // A recessed socket reads as an eye even before the highlight lands.
+    rig.add(blob(size * 3.1, size * 2.3, size * 1.4), pal.plateDark, M,
+      { p: [side * spread, y, z * 0.96] });
+    rig.add(G.sphere(size, 8, 6), pal.eye, E, { p: [side * spread, y, z] });
+  }
+
+  // Nose
+  rig.add(blob(0.028 * H, 0.05 * H, 0.045 * H), pal.skin, M,
+    { p: [0, y - 0.026 * H, z * 0.98] });
+
   if (options.brow) {
-    rig.add(G.box(0.14 * H, 0.018 * H, 0.03 * H), pal.hair, M, { p: [0, y + 0.032 * H, z * 0.92] });
+    for (const side of [1, -1]) {
+      rig.add(G.box(0.058 * H, 0.017 * H, 0.026 * H), pal.hair, M,
+        { p: [side * spread, y + 0.034 * H, z * 0.93], r: [0, 0, side * -0.16] });
+    }
+  }
+  if (options.mouth) {
+    rig.add(G.box(0.05 * H, 0.011 * H, 0.02 * H), pal.plateDark, M,
+      { p: [0, y - 0.062 * H, z * 0.94] });
   }
 }
 

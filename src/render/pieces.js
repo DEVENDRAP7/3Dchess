@@ -64,7 +64,7 @@ function buildPawn(rig, pal, side) {
   neckAndHead(rig, pal, s);
   if (side === 'w') {
     // The Sunspear's face shows under an open sallet.
-    face(rig, pal, s, { brow: true });
+    face(rig, pal, s, { brow: true, mouth: true });
     helmSallet(rig, pal, s, { crest: true });
   } else {
     // The Duskblade keeps her visor down; only the eye-slit glows.
@@ -122,10 +122,16 @@ function buildKnight(rig, pal, side) {
     rig.add(G.cone(0.04, 0.11, 7), pal.beast, M, { p: [x, 1.005, 0.26], r: [-0.2, 0, x > 0 ? 0.24 : -0.24] });
     rig.add(G.cone(0.026, 0.065, 6), pal.plateDark, M, { p: [x, 1.01, 0.265], r: [-0.2, 0, x > 0 ? 0.24 : -0.24] });
   }
-  rig.add(blob(0.148, 0.11, 0.27), pal.plate, T, { p: [0, 0.935, 0.36] });      // chamfron
+  rig.add(blob(0.115, 0.075, 0.15), pal.beastDark, M, { p: [0, 0.775, 0.40] });   // jaw
+  rig.add(blob(0.16, 0.14, 0.16), pal.beast, M, { p: [0, 0.845, 0.245] });        // cheek
+  rig.add(blob(0.148, 0.11, 0.27), pal.plate, T, { p: [0, 0.935, 0.36] });        // chamfron
   rig.add(G.cone(0.034, 0.17, 8), pal.trim, T, { p: [0, 1.025, 0.33], r: [-0.28, 0, 0] });
-  rig.add(G.sphere(0.017, 7, 6), pal.eye, E, { p: [0.098, 0.885, 0.40] });
-  rig.add(G.sphere(0.017, 7, 6), pal.eye, E, { p: [-0.098, 0.885, 0.40] });
+  for (const x of [0.098, -0.098]) {
+    rig.add(blob(0.05, 0.042, 0.035), pal.beastDark, M, { p: [x, 0.885, 0.393] });
+    rig.add(G.sphere(0.016, 7, 6), pal.eye, E, { p: [x, 0.885, 0.404] });
+  }
+  // Forelock falling between the ears
+  rig.add(G.box(0.05, 0.10, 0.03), pal.hair, M, { p: [0, 0.985, 0.30], r: [0.5, 0, 0] });
 
   // --- rider: a proper armoured figure, seated ---
   rig.group('body');
@@ -188,8 +194,8 @@ function buildKnight(rig, pal, side) {
   rig.add(blob(0.065, 0.075, 0.065), pal.plateDark, T, { p: [-0.135, chestY - 0.12, riderZ + 0.24] });
 
   rig.group('cape', [0, chestY + 0.09, riderZ - 0.08]);
-  rig.add(G.cape(0.16, 0.30, 0.52, 2.2, 12), pal.clothDeep, M,
-    { p: [0, chestY - 0.14, riderZ - 0.10], twoSided: true });
+  rig.add(G.cape(0.135, 0.21, 0.42, 1.7, 10), pal.clothDeep, M,
+    { p: [0, chestY - 0.10, riderZ - 0.09], twoSided: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +226,10 @@ function buildBishop(rig, pal, side) {
   rig.add(G.box(0.11 * H, 0.024 * H, 0.022 * H), pal.gem, E, { p: [0, 0.63 * H, 0.146 * H] });
 
   // Shoulders under the cope
-  rig.add(blob(0.33 * H, 0.13 * H, 0.25 * H), pal.cloth, M, { p: [0, s.shoulder, 0] });
+  rig.add(blob(0.30 * H, 0.21 * H, 0.27 * H), pal.cloth, M, { p: [0, s.shoulder - 0.02 * H, 0] });
+  for (const x of [0.125 * H, -0.125 * H]) {
+    rig.add(blob(0.13 * H, 0.15 * H, 0.16 * H), pal.cloth, M, { p: [x, s.shoulder - 0.03 * H, 0] });
+  }
   rig.add(G.torus(0.115 * H, 0.032 * H, 14), pal.trim, T,
     { p: [0, s.neck + 0.01 * H, 0], r: [Math.PI / 2, 0, 0] });
 
@@ -240,21 +249,27 @@ function buildBishop(rig, pal, side) {
   rig.group('head', [0, s.neck, 0]);
   rig.bone(0.05 * H, 0.058 * H, [0, s.chin - 0.02 * H, 0], [0, s.neck - 0.02 * H, 0], pal.skin, M, 8);
   rig.add(G.sphere(P.headR * H, 14, 11), pal.skin, M, { p: [0, s.headY, 0], s: [1, 1.09, 1.02] });
-  face(rig, pal, s, { brow: true });
+  face(rig, pal, s, { brow: true, mouth: true });
   rig.add(blob(0.19 * H, 0.09 * H, 0.17 * H), pal.hair, M, { p: [0, s.headY - 0.055 * H, -0.03 * H] });
 
   const mitreBase = s.crown - 0.05 * H;
   rig.add(G.lathe([
     [0.10 * H, mitreBase], [0.112 * H, mitreBase + 0.025 * H], [0.106 * H, mitreBase + 0.08 * H],
     [0.078 * H, mitreBase + 0.145 * H], [0.04 * H, mitreBase + 0.19 * H], [0, mitreBase + 0.21 * H],
-  ], 14), pal.cloth, M, { s: [1.18, 1, 0.52] });
-  rig.add(G.box(0.024 * H, 0.20 * H, 0.075 * H), pal.clothDeep, M,
-    { p: [0, mitreBase + 0.105 * H, 0.004 * H] });
+  ], 14), pal.cloth, M, { s: [1.28, 1, 0.52] });
+  // Orphrey — the embroidered band running up the front of the mitre.
+  rig.add(G.box(0.032 * H, 0.20 * H, 0.02 * H), pal.trim, T,
+    { p: [0, mitreBase + 0.095 * H, 0.052 * H], r: [-0.12, 0, 0] });
+  // Infulae — the two ribbons hanging down the back
+  for (const x of [0.05 * H, -0.05 * H]) {
+    rig.add(G.box(0.045 * H, 0.20 * H, 0.014 * H), pal.trim, T,
+      { p: [x, mitreBase - 0.08 * H, -0.085 * H], twoSided: true });
+  }
   rig.add(G.torus(0.106 * H, 0.022 * H, 16), pal.trim, T,
-    { p: [0, mitreBase + 0.012 * H, 0], r: [Math.PI / 2, 0, 0] });
+    { p: [0, mitreBase + 0.012 * H, 0], r: [Math.PI / 2, 0, 0], s: [1.24, 0.55, 1] });
   rig.add(G.sphere(0.03 * H, 10, 8), pal.gem, E,
-    { p: [0, mitreBase + 0.075 * H, 0.09 * H], s: [1, 1.4, 0.6] });
-  rig.add(G.cone(0.02 * H, 0.055 * H, 8), pal.trim, T, { p: [0, mitreBase + 0.235 * H, 0] });
+    { p: [0, mitreBase + 0.03 * H, 0.062 * H], s: [1, 1.3, 0.6] });
+  rig.add(G.sphere(0.022 * H, 8, 6), pal.trim, T, { p: [0, mitreBase + 0.225 * H, 0] });
 
   // Witchlight that never quite settles
   rig.group('orb', [0, s.crown + 0.12 * H, 0]);
@@ -388,7 +403,7 @@ function buildQueen(rig, pal, side) {
   // Head, hair and a seven-pointed crown
   rig.group('head', [0, s.neck, 0]);
   neckAndHead(rig, pal, s, { gorget: false });
-  face(rig, pal, s);
+  face(rig, pal, s, { mouth: true });
   rig.add(blob(0.215 * H, 0.20 * H, 0.20 * H), pal.hair, M, { p: [0, s.headY + 0.012 * H, -0.022 * H] });
   for (const x of [0.088 * H, -0.088 * H]) {
     rig.add(blob(0.085 * H, 0.26 * H, 0.085 * H), pal.hair, M, { p: [x, s.headY - 0.10 * H, -0.03 * H] });
