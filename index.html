@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0a0b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Chessforge — a 3D chess game where every piece is a character. Play the computer, pass and play, or challenge a friend with a room code. Runs in the browser on any phone.">
+<title>Chessforge — 3D Character Chess</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<canvas id="stage" aria-label="3D chess board"></canvas>
+
+<!-- ── Loading ─────────────────────────────────────────────────────────── -->
+<div id="boot" class="overlay">
+  <div class="boot-inner">
+    <div class="boot-mark">♞</div>
+    <div class="boot-title">CHESSFORGE</div>
+    <div class="boot-bar"><span id="bootFill"></span></div>
+    <div class="boot-note" id="bootNote">Forging the armies…</div>
+  </div>
+</div>
+
+<!-- ── Title / main menu ───────────────────────────────────────────────── -->
+<div id="menu" class="overlay hidden">
+  <div class="menu-card">
+    <header class="menu-head">
+      <h1>CHESSFORGE</h1>
+      <p class="tagline">Two armies. Twelve characters. Every rule of chess.</p>
+    </header>
+
+    <div class="menu-body" id="menuHome">
+      <button class="btn primary" data-nav="setup-ai">
+        <span class="btn-icon">♜</span>
+        <span><strong>Play the Computer</strong><small>Four opponents, from Squire to Grandmaster</small></span>
+      </button>
+      <button class="btn" data-nav="setup-local">
+        <span class="btn-icon">⇄</span>
+        <span><strong>Pass &amp; Play</strong><small>Share one phone, board turns to face you</small></span>
+      </button>
+      <button class="btn" data-nav="setup-online">
+        <span class="btn-icon">🌐</span>
+        <span><strong>Play a Friend Online</strong><small>Share a room code or a link</small></span>
+      </button>
+      <div class="menu-row">
+        <button class="btn ghost small" data-nav="codex"><span class="btn-icon">📖</span>Codex</button>
+        <button class="btn ghost small" data-nav="settings"><span class="btn-icon">⚙</span>Settings</button>
+      </div>
+      <button class="btn ghost small hidden" id="resumeBtn"><span class="btn-icon">▸</span>Resume game</button>
+    </div>
+
+    <!-- Computer / local setup -->
+    <div class="menu-body hidden" id="menuSetup">
+      <h2 class="panel-title" id="setupTitle">Choose your army</h2>
+      <div class="choice-grid" id="sideChoice">
+        <button class="choice" data-side="w">
+          <span class="choice-mark light">♔</span>
+          <strong>Dawn Legion</strong><small>Ivory &amp; gold · moves first</small>
+        </button>
+        <button class="choice" data-side="b">
+          <span class="choice-mark dark">♚</span>
+          <strong>Umbral Court</strong><small>Obsidian &amp; violet · moves second</small>
+        </button>
+        <button class="choice" data-side="random">
+          <span class="choice-mark">⁇</span>
+          <strong>Let fate decide</strong><small>Random army</small>
+        </button>
+      </div>
+
+      <div id="difficultyBlock">
+        <h2 class="panel-title">Opponent</h2>
+        <div class="seg" id="difficultyChoice" role="radiogroup" aria-label="Difficulty">
+          <button data-difficulty="novice">Squire</button>
+          <button data-difficulty="casual" class="on">Knight</button>
+          <button data-difficulty="skilled">Warlord</button>
+          <button data-difficulty="master">Grandmaster</button>
+        </div>
+        <p class="hint-text" id="difficultyNote">Plays quickly and punishes obvious blunders.</p>
+      </div>
+
+      <div class="menu-row">
+        <button class="btn ghost" data-nav="home">Back</button>
+        <button class="btn primary" id="startBtn">Begin the match</button>
+      </div>
+    </div>
+
+    <!-- Online lobby -->
+    <div class="menu-body hidden" id="menuOnline">
+      <h2 class="panel-title">Play a friend</h2>
+      <p class="hint-text">Your phones connect directly to each other. One of you creates the room, the other joins with the code.</p>
+
+      <div class="online-actions" id="onlineActions">
+        <button class="btn primary" id="hostBtn">
+          <span class="btn-icon">✦</span>
+          <span><strong>Create a room</strong><small>You play the Dawn Legion</small></span>
+        </button>
+        <div class="join-row">
+          <input id="joinCode" inputmode="latin" autocapitalize="characters" autocomplete="off"
+                 spellcheck="false" maxlength="5" placeholder="CODE" aria-label="Room code">
+          <button class="btn" id="joinBtn">Join</button>
+        </div>
+      </div>
+
+      <div class="room-panel hidden" id="roomPanel">
+        <div class="room-code" id="roomCode">—</div>
+        <p class="hint-text" id="roomStatus">Opening the room…</p>
+        <div class="menu-row">
+          <button class="btn" id="copyLinkBtn"><span class="btn-icon">🔗</span>Copy link</button>
+          <button class="btn" id="shareBtn"><span class="btn-icon">↗</span>Share</button>
+        </div>
+      </div>
+
+      <p class="error-text hidden" id="onlineError"></p>
+      <div class="menu-row">
+        <button class="btn ghost" data-nav="home" id="onlineBackBtn">Back</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="menu-body hidden" id="menuSettings">
+      <h2 class="panel-title">Settings</h2>
+
+      <label class="setting"><span>Sound</span>
+        <input type="checkbox" id="setSound" checked><i class="switch"></i></label>
+      <label class="setting"><span>Show legal moves</span>
+        <input type="checkbox" id="setHints" checked><i class="switch"></i></label>
+      <label class="setting"><span>Camera turns to face the player</span>
+        <input type="checkbox" id="setAutoCam" checked><i class="switch"></i></label>
+
+      <h3 class="sub-title">Board</h3>
+      <div class="seg" id="themeChoice">
+        <button data-theme="solstice" class="on">Solstice</button>
+        <button data-theme="obsidian">Obsidian</button>
+        <button data-theme="verdant">Verdant</button>
+      </div>
+
+      <h3 class="sub-title">Graphics</h3>
+      <div class="seg" id="qualityChoice">
+        <button data-quality="low">Battery</button>
+        <button data-quality="medium">Balanced</button>
+        <button data-quality="high">Full</button>
+        <button data-quality="auto" class="on">Auto</button>
+      </div>
+
+      <h3 class="sub-title">Animation speed</h3>
+      <div class="seg" id="speedChoice">
+        <button data-speed="0.7">Cinematic</button>
+        <button data-speed="1" class="on">Normal</button>
+        <button data-speed="1.8">Swift</button>
+        <button data-speed="99">Instant</button>
+      </div>
+
+      <div class="menu-row">
+        <button class="btn ghost" data-nav="home">Back</button>
+      </div>
+    </div>
+
+    <!-- Codex -->
+    <div class="menu-body hidden" id="menuCodex">
+      <h2 class="panel-title">The Codex</h2>
+      <div class="seg" id="codexArmy">
+        <button data-army="w" class="on">Dawn Legion</button>
+        <button data-army="b">Umbral Court</button>
+      </div>
+      <div class="codex-list" id="codexList"></div>
+      <div class="menu-row">
+        <button class="btn ghost" data-nav="home">Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── In-game HUD ─────────────────────────────────────────────────────── -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
+
+    <div class="turn-pill" id="turnPill">
+      <span class="turn-dot" id="turnDot"></span>
+      <span id="turnText">Dawn Legion to move</span>
+      <span class="net-badge hidden" id="netBadge">—</span>
+    </div>
+
+    <button class="icon-btn" id="soundBtn" aria-label="Sound">🔊</button>
+  </div>
+
+  <div class="trays">
+    <div class="tray" id="trayTop"><span class="tray-label">Fallen</span><span class="tray-items"></span><span class="tray-score"></span></div>
+    <div class="tray" id="trayBottom"><span class="tray-label">Fallen</span><span class="tray-items"></span><span class="tray-score"></span></div>
+  </div>
+
+  <div class="ticker" id="ticker"></div>
+
+  <div class="hud-bottom">
+    <button class="icon-btn" id="flipBtn" aria-label="Rotate view">⟳</button>
+    <button class="icon-btn" id="undoBtn" aria-label="Undo">↶</button>
+    <button class="icon-btn" id="hintBtn" aria-label="Hint">💡</button>
+    <button class="icon-btn" id="movesBtn" aria-label="Move list">≣</button>
+  </div>
+
+  <div class="think hidden" id="thinking"><span class="spinner"></span><span id="thinkingText">Thinking…</span></div>
+</div>
+
+<!-- ── Move list drawer ────────────────────────────────────────────────── -->
+<div id="movesPanel" class="drawer hidden">
+  <div class="drawer-head">
+    <strong>Moves</strong>
+    <button class="icon-btn small" id="movesClose" aria-label="Close">✕</button>
+  </div>
+  <div class="moves-scroll"><table id="movesTable"><tbody></tbody></table></div>
+  <div class="drawer-foot">
+    <button class="btn ghost small" id="copyPgnBtn">Copy game</button>
+    <span class="hint-text" id="fenNote"></span>
+  </div>
+</div>
+
+<!-- ── Character card ──────────────────────────────────────────────────── -->
+<div id="cardPanel" class="card-panel hidden">
+  <button class="icon-btn small card-close" id="cardClose" aria-label="Close">✕</button>
+  <div class="card-head">
+    <span class="card-glyph" id="cardGlyph">♟</span>
+    <div>
+      <strong id="cardName">—</strong>
+      <small id="cardRank">—</small>
+    </div>
+  </div>
+  <dl class="card-facts">
+    <div><dt>Bearing</dt><dd id="cardPersonality">—</dd></div>
+    <div><dt>Dress</dt><dd id="cardDress">—</dd></div>
+    <div><dt>Helm</dt><dd id="cardHelm">—</dd></div>
+    <div><dt>Habit</dt><dd id="cardQuirk">—</dd></div>
+    <div><dt>Signature</dt><dd id="cardSignature">—</dd></div>
+  </dl>
+</div>
+
+<!-- ── Promotion ───────────────────────────────────────────────────────── -->
+<div id="promotion" class="overlay hidden">
+  <div class="promo-card">
+    <h2>Your soldier has reached the far rank</h2>
+    <p class="hint-text">Choose what they become.</p>
+    <div class="promo-grid" id="promoGrid"></div>
+  </div>
+</div>
+
+<!-- ── Game over ───────────────────────────────────────────────────────── -->
+<div id="gameover" class="overlay hidden">
+  <div class="over-card">
+    <div class="over-mark" id="overMark">♔</div>
+    <h2 id="overTitle">Checkmate</h2>
+    <p id="overText">The Dawn Legion holds the field.</p>
+    <div class="menu-row">
+      <button class="btn primary" id="rematchBtn">Rematch</button>
+      <button class="btn ghost" id="overMenuBtn">Main menu</button>
+    </div>
+    <p class="hint-text hidden" id="rematchNote"></p>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="src/main.js"></script>
+<noscript><p style="color:#fff;padding:2rem;font:16px system-ui">Chessforge needs JavaScript enabled.</p></noscript>
+</body>
+</html>

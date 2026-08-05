@@ -1,0 +1,14 @@
+{
+  "name": "Chessforge — 3D Character Chess",
+  "short_name": "Chessforge",
+  "description": "A 3D chess game where every piece is a character. Play the computer, pass and play, or challenge a friend with a room code.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07080e",
+  "theme_color": "#0a0b12",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
