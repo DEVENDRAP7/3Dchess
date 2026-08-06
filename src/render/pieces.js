@@ -27,7 +27,7 @@ const TAU = Math.PI * 2;
  * crown or a lance can be reshaped without every other proportion drifting.
  */
 const AUTHOR_HEIGHT = { p: 1.02, n: 1.30, b: 1.20, r: 1.16, q: 1.24, k: 1.32 };
-export const PIECE_HEIGHT = { p: 1.02, n: 1.20, b: 1.22, r: 1.12, q: 1.26, k: 1.32 };
+export const PIECE_HEIGHT = { p: 0.90, r: 1.04, n: 1.16, b: 1.30, q: 1.40, k: 1.50 };
 export const HEIGHT = AUTHOR_HEIGHT;
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ export const HEIGHT = AUTHOR_HEIGHT;
 function buildPawn(rig, pal, side) {
   const H = HEIGHT.p;
   const s = skeleton(H);
-  plinth(rig, pal, 0.26);
+  plinth(rig, pal, 0.235);
 
   legPlate(rig, pal, s, 1, { stance: 0.085 * H });
   legPlate(rig, pal, s, -1, { stance: 0.085 * H });
@@ -65,7 +65,7 @@ function buildPawn(rig, pal, side) {
   if (side === 'w') {
     // The Sunspear's face shows under an open sallet.
     face(rig, pal, s, { brow: true, mouth: true });
-    helmSallet(rig, pal, s, { crest: true });
+    helmSallet(rig, pal, s, { crest: false });
   } else {
     // The Duskblade keeps her visor down; only the eye-slit glows.
     helmSallet(rig, pal, s, { crest: true });
@@ -74,9 +74,9 @@ function buildPawn(rig, pal, side) {
     rig.add(G.box(0.13 * H, 0.014 * H, 0.016 * H), pal.glow, E,
       { p: [0, s.headY + 0.012 * H, P.headR * H * 1.0] });
   }
-  // A single brass feather, for luck
-  rig.add(G.box(0.018 * H, 0.13 * H, 0.008 * H), pal.trim, T,
-    { p: [0.055 * H, s.crown + 0.05 * H, -0.03 * H], r: [-0.35, 0, 0.35] });
+  // A single brass feather, for luck — the pawn's only ornament.
+  rig.add(G.box(0.016 * H, 0.10 * H, 0.008 * H), pal.trim, T,
+    { p: [0.05 * H, s.crown + 0.03 * H, -0.03 * H], r: [-0.35, 0, 0.35] });
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ function buildKnight(rig, pal, side) {
 function buildBishop(rig, pal, side) {
   const H = HEIGHT.b;
   const s = skeleton(H);
-  plinth(rig, pal, 0.27);
+  plinth(rig, pal, 0.245);
 
   legBooted(rig, pal, s, 1);
   legBooted(rig, pal, s, -1);
@@ -287,7 +287,7 @@ function buildBishop(rig, pal, side) {
 function buildRook(rig, pal, side) {
   const H = HEIGHT.r;
   const s = skeleton(H);
-  plinth(rig, pal, 0.30);
+  plinth(rig, pal, 0.335);
 
   legPlate(rig, pal, s, 1, { stance: 0.105 * H });
   legPlate(rig, pal, s, -1, { stance: 0.105 * H });
@@ -331,23 +331,27 @@ function buildRook(rig, pal, side) {
   // Head: a tower helm crowned with crenellations
   rig.group('head', [0, s.neck, 0]);
   rig.bone(0.055 * H, 0.062 * H, [0, s.chin, 0], [0, s.neck - 0.02 * H, 0], pal.stoneDark, M, 8);
-  rig.add(G.cyl(0.10 * H, 0.115 * H, 0.17 * H, 14), pal.stone, M, { p: [0, s.headY, 0] });
-  rig.add(blob(0.225 * H, 0.19 * H, 0.215 * H), pal.stone, M, { p: [0, s.headY, 0] });
+  rig.add(G.box(0.235 * H, 0.20 * H, 0.235 * H), pal.stone, M, { p: [0, s.headY, 0] });
   // Arrow-slit eyes with a furnace behind them
   rig.add(G.box(0.16 * H, 0.038 * H, 0.03 * H), pal.stoneDark, M,
     { p: [0, s.headY + 0.012 * H, 0.10 * H] });
   for (const x of [0.045 * H, -0.045 * H]) {
     rig.add(G.box(0.035 * H, 0.016 * H, 0.018 * H), pal.glow, E, { p: [x, s.headY + 0.012 * H, 0.112 * H] });
   }
-  rig.add(G.cyl(0.145 * H, 0.125 * H, 0.045 * H, 16), pal.stone, M, { p: [0, s.crown + 0.005 * H, 0] });
-  rig.add(G.torus(0.145 * H, 0.012 * H, 18), pal.trim, T,
-    { p: [0, s.crown + 0.022 * H, 0], r: [Math.PI / 2, 0, 0] });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * TAU;
-    rig.add(G.box(0.062 * H, 0.075 * H, 0.055 * H), pal.stone, M,
-      { p: [Math.sin(a) * 0.108 * H, s.crown + 0.065 * H, Math.cos(a) * 0.108 * H], r: [0, a, 0] });
+  // A square battlement crown: four tall corner merlons and four short ones
+  // between them, laid out on a square rather than a circle.
+  rig.add(G.box(0.33 * H, 0.05 * H, 0.33 * H), pal.stone, M, { p: [0, s.crown + 0.01 * H, 0] });
+  rig.add(G.box(0.35 * H, 0.022 * H, 0.35 * H), pal.trim, T, { p: [0, s.crown + 0.038 * H, 0] });
+  const merlon = 0.115 * H;
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    rig.add(G.box(0.095 * H, 0.135 * H, 0.095 * H), pal.stone, M,
+      { p: [dx * merlon, s.crown + 0.115 * H, dz * merlon] });
   }
-  rig.add(G.sphere(0.075 * H, 10, 8), pal.glow, E, { p: [0, s.crown + 0.045 * H, 0], s: [1, 0.45, 1] });
+  for (const [dx, dz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+    rig.add(G.box(0.085 * H, 0.075 * H, 0.085 * H), pal.stone, M,
+      { p: [dx * merlon, s.crown + 0.085 * H, dz * merlon] });
+  }
+  rig.add(G.box(0.19 * H, 0.05 * H, 0.19 * H), pal.glow, E, { p: [0, s.crown + 0.075 * H, 0] });
 
   // Banner on a pole strapped to the back
   rig.group('banner', [0, s.shoulder, -0.16 * H]);
@@ -467,7 +471,11 @@ function buildKing(rig, pal, side) {
   rig.add(G.cone(0.085 * H, 0.17 * H, 10), pal.hair, M,
     { p: [0, s.headY - 0.10 * H, 0.03 * H], r: [Math.PI, 0, 0] });
   rig.add(blob(0.20 * H, 0.11 * H, 0.19 * H), pal.hair, M, { p: [0, s.headY + 0.03 * H, -0.025 * H] });
-  crown(rig, pal, s, { points: 5, radius: 0.105 * H, tall: 0.12 * H, base: s.crown });
+  crown(rig, pal, s, { points: 5, radius: 0.105 * H, tall: 0.09 * H, base: s.crown });
+  // The cross that says "king" from right across the board.
+  rig.add(G.box(0.03 * H, 0.15 * H, 0.03 * H), pal.trim, T, { p: [0, s.crown + 0.20 * H, 0] });
+  rig.add(G.box(0.095 * H, 0.03 * H, 0.03 * H), pal.trim, T, { p: [0, s.crown + 0.225 * H, 0] });
+  rig.add(G.sphere(0.022 * H, 8, 6), pal.gem, E, { p: [0, s.crown + 0.285 * H, 0] });
 
   rig.group('cape', [0, s.shoulder + 0.02 * H, -0.06 * H]);
   cape(rig, pal, s, { bottom: 0.05 * H, arc: 2.4, collar: false });
@@ -608,6 +616,14 @@ export function baseYawFor(color) {
   return color === 'w' ? Math.PI : 0;
 }
 
+/**
+ * A fixed stylistic turn applied to the model inside its container, on top of
+ * the army facing. A horse seen head-on is just a muzzle and two ears — the
+ * knight only reads as a horse in profile, which is why carved chess sets
+ * angle it too. Everyone else stands square.
+ */
+const MODEL_YAW = { n: -0.9 };
+
 /** Instantiates a character from its prototype, ready to place on the board. */
 export function spawnPiece(prototypes, color, type) {
   const model = prototypes[color][type].clone();
@@ -620,7 +636,11 @@ export function spawnPiece(prototypes, color, type) {
 
   const container = new THREE.Group();
   container.add(model);
-  model.rotation.y = baseYawFor(color);
+  // The container carries the army facing — move animations swing it toward the
+  // direction of travel and settle it back. The model only carries the fixed
+  // stylistic turn; putting the facing here too would compound the two and send
+  // an army the wrong way.
+  model.rotation.y = MODEL_YAW[type] || 0;
 
   container.userData = {
     color,

@@ -69,6 +69,8 @@ export class Stage {
 
     this.frameTimes = [];
     this.autoQuality = true;
+    this.interacting = false;
+    this.spin = 0;
     this.resize();
   }
 
@@ -169,6 +171,7 @@ export class Stage {
   /** Points the camera from behind the given army. */
   faceSide(color, immediate = false) {
     // theta 0 puts the camera at +Z, which is behind White's home rank.
+    this.spin = 0;
     this.desired.theta = color === 'w' ? 0 : Math.PI;
     this.desired.phi = this.portrait ? 0.58 : 0.80;
     this.desired.radius = this.portrait ? 17.0 : 13.2;
@@ -183,13 +186,54 @@ export class Stage {
     }
   }
 
+  /**
+   * Camera controls.
+   *
+   * Two rules make this feel precise rather than floaty:
+   *
+   * 1. While a finger is down the camera is driven *directly* — no easing
+   *    between where the gesture says the camera should be and where it is.
+   *    Smoothing only runs when the camera is travelling to a target on its
+   *    own (flipping sides, settling after a fling).
+   * 2. Gestures are absolute, not incremental. A pinch is measured against the
+   *    finger spread and radius recorded when the second finger landed, so
+   *    zoom cannot drift; rotation is measured against the anchor recorded when
+   *    the drag began. Rounding errors never accumulate.
+   */
   _bindInput() {
     const canvas = this.canvas;
     const pointers = new Map();
-    let lastPinch = 0;
+
+    // Gesture anchors: the camera state and finger geometry at gesture start.
+    let anchor = null;
     let dragged = false;
     let downTime = 0;
     let downPos = { x: 0, y: 0 };
+    let lastTapTime = 0;
+    let lastMoveTime = 0;
+    let spinVelocity = 0;
+
+    const viewport = () => Math.min(canvas.clientWidth || 1, canvas.clientHeight || 1);
+
+    const centreOf = (list) => {
+      let x = 0, y = 0;
+      for (const p of list) { x += p.x; y += p.y; }
+      return { x: x / list.length, y: y / list.length };
+    };
+
+    /** Re-anchors to the current fingers, keeping the camera exactly where it is. */
+    const rebase = () => {
+      const list = [...pointers.values()];
+      if (!list.length) { anchor = null; return; }
+      const centre = centreOf(list);
+      anchor = {
+        centre,
+        theta: this.desired.theta,
+        phi: this.desired.phi,
+        radius: this.desired.radius,
+        spread: list.length >= 2 ? Math.hypot(list[0].x - list[1].x, list[0].y - list[1].y) : 0,
+      };
+    };
 
     const onDown = (e) => {
       canvas.setPointerCapture?.(e.pointerId);
@@ -198,58 +242,100 @@ export class Stage {
         dragged = false;
         downTime = performance.now();
         downPos = { x: e.clientX, y: e.clientY };
+        spinVelocity = 0;
+      } else {
+        dragged = true;      // a second finger is never a tap
       }
-      lastPinch = 0;
+      this.interacting = true;
+      rebase();
     };
 
     const onMove = (e) => {
-      if (!pointers.has(e.pointerId)) return;
-      const previous = pointers.get(e.pointerId);
-      const dx = e.clientX - previous.x;
-      const dy = e.clientY - previous.y;
+      if (!pointers.has(e.pointerId) || !anchor) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const list = [...pointers.values()];
+      const now = performance.now();
 
-      if (pointers.size === 1) {
+      if (list.length === 1) {
         const travel = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
-        if (travel > 9) dragged = true;
-        if (dragged) {
-          this.desired.theta -= dx * 0.0068;
-          this.desired.phi = clamp(this.desired.phi - dy * 0.0055, this.limits.minPhi, this.limits.maxPhi);
+        if (!dragged && travel > 8) { dragged = true; rebase(); return; }
+        if (!dragged) return;
+
+        // A full sweep of the short screen edge turns the board half a turn,
+        // so the gesture feels the same on any device.
+        const span = viewport();
+        const dx = e.clientX - anchor.centre.x;
+        const dy = e.clientY - anchor.centre.y;
+        const previousTheta = this.desired.theta;
+        this.desired.theta = anchor.theta - (dx / span) * Math.PI;
+        this.desired.phi = clamp(anchor.phi - (dy / span) * Math.PI * 0.8,
+          this.limits.minPhi, this.limits.maxPhi);
+
+        // Track spin speed so releasing mid-sweep glides to a stop.
+        const dt = Math.max(1, now - lastMoveTime);
+        spinVelocity = (this.desired.theta - previousTheta) / dt * 16;
+      } else {
+        const centre = centreOf(list);
+        const spread = Math.hypot(list[0].x - list[1].x, list[0].y - list[1].y);
+
+        // Zoom is a straight ratio against the spread at pinch start.
+        if (anchor.spread > 10 && spread > 10) {
+          this.desired.radius = clamp(anchor.radius * (anchor.spread / spread),
+            this.limits.minRadius, this.limits.maxRadius);
         }
-      } else if (pointers.size === 2) {
-        dragged = true;
-        const [a, b] = [...pointers.values()];
-        const distance = Math.hypot(a.x - b.x, a.y - b.y);
-        if (lastPinch) {
-          const scale = lastPinch / distance;
-          this.desired.radius = clamp(this.desired.radius * scale, this.limits.minRadius, this.limits.maxRadius);
-        }
-        lastPinch = distance;
+        // Two fingers can still orbit, using the midpoint.
+        const span = viewport();
+        this.desired.theta = anchor.theta - ((centre.x - anchor.centre.x) / span) * Math.PI;
+        this.desired.phi = clamp(anchor.phi - ((centre.y - anchor.centre.y) / span) * Math.PI * 0.8,
+          this.limits.minPhi, this.limits.maxPhi);
       }
+      lastMoveTime = now;
     };
 
     const onUp = (e) => {
       const wasSingle = pointers.size === 1;
       pointers.delete(e.pointerId);
-      if (pointers.size < 2) lastPinch = 0;
-      const quick = performance.now() - downTime < 500;
-      if (wasSingle && !dragged && quick && this.onTap) {
-        this.onTap(e.clientX, e.clientY);
+
+      if (pointers.size === 0) {
+        this.interacting = false;
+        anchor = null;
+        // Only carry momentum from a genuine sweep, never from a stray twitch.
+        this.spin = dragged && Math.abs(spinVelocity) > 0.004 ? clamp(spinVelocity, -0.09, 0.09) : 0;
+      } else {
+        rebase();            // lifting one of two fingers must not jump the view
       }
+
+      if (!wasSingle || dragged) return;
+      if (performance.now() - downTime > 500) return;
+
+      // Double-tap on empty space reframes the board.
+      const now = performance.now();
+      if (now - lastTapTime < 300) {
+        lastTapTime = 0;
+        if (this.onDoubleTap) this.onDoubleTap(e.clientX, e.clientY);
+        return;
+      }
+      lastTapTime = now;
+      if (this.onTap) this.onTap(e.clientX, e.clientY);
     };
 
     canvas.addEventListener('pointerdown', onDown, { passive: true });
     canvas.addEventListener('pointermove', onMove, { passive: true });
     canvas.addEventListener('pointerup', onUp, { passive: true });
     canvas.addEventListener('pointercancel', onUp, { passive: true });
+
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.desired.radius = clamp(
-        this.desired.radius * (1 + Math.sign(e.deltaY) * 0.09),
+      // Exponential so each notch feels the same at any distance.
+      const step = Math.exp(clamp(e.deltaY, -120, 120) * 0.0016);
+      this.desired.radius = clamp(this.desired.radius * step,
         this.limits.minRadius, this.limits.maxRadius);
+      this.spin = 0;
     }, { passive: false });
-    // Stop the browser from treating drags on the board as scroll or zoom.
+
+    // Stop the browser treating board drags as scrolling or page zoom.
     canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    canvas.addEventListener('gesturestart', (e) => e.preventDefault());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -277,11 +363,24 @@ export class Stage {
   }
 
   update(dt, effects) {
-    // Ease the camera toward where it wants to be.
-    const smoothing = 1 - Math.pow(0.0016, dt);
-    this.spherical.theta += (this.desired.theta - this.spherical.theta) * smoothing;
-    this.spherical.phi += (this.desired.phi - this.spherical.phi) * smoothing;
-    this.spherical.radius += (this.desired.radius - this.spherical.radius) * smoothing;
+    // Momentum from a release, decaying smoothly to a stop.
+    if (this.spin && !this.interacting) {
+      this.desired.theta += this.spin;
+      this.spin *= Math.pow(0.045, dt);
+      if (Math.abs(this.spin) < 0.0006) this.spin = 0;
+    }
+
+    if (this.interacting) {
+      // Under the finger the camera goes exactly where the gesture puts it.
+      this.spherical.theta = this.desired.theta;
+      this.spherical.phi = this.desired.phi;
+      this.spherical.radius = this.desired.radius;
+    } else {
+      const smoothing = 1 - Math.pow(0.0016, dt);
+      this.spherical.theta += (this.desired.theta - this.spherical.theta) * smoothing;
+      this.spherical.phi += (this.desired.phi - this.spherical.phi) * smoothing;
+      this.spherical.radius += (this.desired.radius - this.spherical.radius) * smoothing;
+    }
 
     const { radius, theta, phi } = this.spherical;
     const sinPhi = Math.sin(phi);
