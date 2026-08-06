@@ -10,6 +10,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import {
   createInitialState, cloneState, generateLegalMoves, makeMove, getGameStatus,
   toSAN, toFEN, colorOf, typeOf, opponent, squareName, findKing, inCheck,
+  analyseMate, PIECE_NAMES,
 } from './chess/engine.js';
 import { findBestMove } from './chess/ai.js';
 
@@ -18,7 +19,10 @@ import { PALETTE, BOARD_THEMES } from './render/palette.js';
 import { createBoard, Markers, squareToWorld } from './render/board.js';
 import { buildPrototypes, spawnPiece, updateIdle, baseYawFor } from './render/pieces.js';
 import { Effects } from './render/effects.js';
-import { Animator, buildMoveAnimation, buildCaptureAnimation, buildPromotionAnimation } from './render/animations.js';
+import {
+  Animator, buildMoveAnimation, buildCaptureAnimation, buildPromotionAnimation,
+  buildDefeatAnimation,
+} from './render/animations.js';
 import { Stage } from './render/scene.js';
 
 import { Sfx } from './audio/sfx.js';
@@ -60,6 +64,9 @@ class Chessforge {
 
     this.online = null;
     this.rematch = { mine: false, theirs: false };
+    // Bumped by every startGame. Async work (an AI search, a queued remote
+    // move) captures it and drops itself if the game moved on meanwhile.
+    this.generation = 0;
   }
 
   // ---------------------------------------------------------------- boot ---
@@ -125,7 +132,7 @@ class Chessforge {
       $('joinCode').value = roomCode;
       this.hud.toast('Room code filled in — tap Join');
     }
-    if (this._hasSave()) $('resumeBtn').classList.remove('hidden');
+    this._refreshHomeButtons();
   }
 
   // ------------------------------------------------------------ settings ---
@@ -209,7 +216,26 @@ class Chessforge {
       this.sfx.click();
       $('menu').classList.remove('hidden');
       this._navigate('home');
-      $('resumeBtn').classList.toggle('hidden', this.gameOver || !this.state);
+    });
+
+    // Closing the menu is the safe default when a match is under way.
+    $('backToGameBtn').addEventListener('click', () => {
+      this.sfx.click();
+      $('menu').classList.add('hidden');
+    });
+
+    $('leaveGameBtn').addEventListener('click', () => {
+      this.sfx.click();
+      if (this.inOnlineGame) {
+        this.online.send({ t: 'resign' });
+        this._leaveOnline();
+      }
+      this.gameOver = true;
+      this.state = null;
+      this.history = [];
+      $('hud').classList.add('hidden');
+      this._navigate('home');
+      this.hud.toast('Match left');
     });
     $('soundBtn').addEventListener('click', () => {
       this.settings.sound = !this.settings.sound;
@@ -305,6 +331,17 @@ class Chessforge {
 
     // Game over
     $('rematchBtn').addEventListener('click', () => this.requestRematch());
+    $('mateRematchBtn').addEventListener('click', () => {
+      this.hud.hideMateScreen();
+      this.requestRematch();
+    });
+    $('mateMenuBtn').addEventListener('click', () => {
+      this.sfx.click();
+      this.hud.hideMateScreen();
+      this._leaveOnline();
+      $('menu').classList.remove('hidden');
+      this._navigate('home');
+    });
     $('overMenuBtn').addEventListener('click', () => {
       this.sfx.click();
       this.hud.hideGameOver();
@@ -339,7 +376,24 @@ class Chessforge {
       $('setupTitle').textContent = ai ? 'Choose your army' : 'Who moves first?';
     }
     if (key === 'codex') this.hud.renderCodex('w');
-    if (key === 'home') $('resumeBtn').classList.toggle('hidden', !this.state || this.gameOver || !this.history.length);
+    if (key === 'home') this._refreshHomeButtons();
+  }
+
+  /**
+   * "Return to game" resumes what is on screen; "Resume saved game" loads from
+   * storage and so is only offered when nothing is in progress. Conflating the
+   * two is how a live online match used to get replaced by an old one.
+   */
+  _refreshHomeButtons() {
+    const live = this.inProgress || this.inOnlineGame;
+    $('backToGameBtn').classList.toggle('hidden', !live);
+    $('leaveGameBtn').classList.toggle('hidden', !live);
+    $('resumeBtn').classList.toggle('hidden', live || !this._hasSave());
+    if (live) {
+      $('backToGameNote').textContent = this.mode === 'online'
+        ? (this.online?.connected ? 'Your opponent is still connected' : 'Reconnecting to your opponent')
+        : 'Your match is still going';
+    }
   }
 
   _applyTheme() {
@@ -358,6 +412,12 @@ class Chessforge {
   // ---------------------------------------------------------- game setup ---
 
   startGame({ mode, playerColor, difficulty, silent = false }) {
+    // Never leave a peer hanging when the player starts something else.
+    if (this.mode === 'online' && mode !== 'online' && this.online) {
+      this.online.send({ t: 'resign' });
+      this._leaveOnline();
+    }
+    this.generation++;
     this.mode = mode;
     this.playerColor = playerColor;
     if (difficulty) this.difficulty = difficulty;
@@ -377,7 +437,11 @@ class Chessforge {
     this.hud.setMoves([]);
     this.hud.setCaptured({ w: [], b: [] }, this.bottomColor());
     this.hud.hideGameOver();
+    this.hud.hideMateScreen();
     this.hud.hideCard();
+    this.mateAnalysis = null;
+    $('cinematic').classList.add('hidden');
+    this.stage.releaseCamera();
     $('movesPanel').classList.add('hidden');
     $('menu').classList.add('hidden');
     $('hud').classList.remove('hidden');
@@ -394,6 +458,16 @@ class Chessforge {
     }
     this._save();
     this.maybeAiMove();
+  }
+
+  /** True while a match is under way — online, versus the computer, or local. */
+  get inProgress() {
+    return !!this.state && !this.gameOver && this.history.length > 0;
+  }
+
+  /** An online match is live only while the peer link is actually up. */
+  get inOnlineGame() {
+    return this.mode === 'online' && !this.gameOver && !!this.online;
   }
 
   /** Which army sits nearest the camera. */
@@ -698,6 +772,7 @@ class Chessforge {
   }
 
   async thinkThenMove() {
+    const generation = this.generation;
     this.hud.setTurn(this.state.turn, {
       label: `${ARMIES[this.state.turn].name} is planning…`,
       thinking: true,
@@ -706,7 +781,9 @@ class Chessforge {
 
     const result = await this.search(this.state, this.difficulty);
     $('thinking').classList.add('hidden');
-    if (!result || this.gameOver) return;
+    // A search can outlive the game that started it — never play into a
+    // different game than the one we were thinking about.
+    if (!result || this.gameOver || generation !== this.generation) return;
 
     // Match the move object to one the engine generated for this position.
     const move = generateLegalMoves(this.state).find((m) =>
@@ -906,10 +983,187 @@ class Chessforge {
       if (playerWon) this.sfx.victory(); else this.sfx.defeat();
     }
 
-    setTimeout(() => this.hud.showGameOver({
-      mark, title, text,
-      canRematch: this.mode !== 'online' || !!this.online?.connected,
-    }), 900);
+    const canRematch = this.mode !== 'online' || !!this.online?.connected;
+    if (status.reason === 'checkmate') {
+      // The mate gets its own scene, then a screen explaining how it happened.
+      this.playCheckmateScene(status, { mark, title, text, canRematch });
+    } else {
+      setTimeout(() => this.hud.showGameOver({ mark, title, text, canRematch }), 900);
+    }
+  }
+
+  // ------------------------------------------------------- checkmate scene ---
+
+  /**
+   * Beat by beat: hold on the final position, close in on the losing king,
+   * light up the pieces that trap him, cross out every square he cannot reach,
+   * let him fall, then title card. Skippable at any point.
+   */
+  async playCheckmateScene(status, result) {
+    const generation = this.generation;
+    const analysis = analyseMate(this.state);
+    this.mateAnalysis = analysis;
+    this.mateResult = result;
+    if (!analysis) { this.hud.showGameOver(result); return; }
+
+    const cine = $('cinematic');
+    let skipped = false;
+    const skip = () => { skipped = true; };
+    $('cineSkip').onclick = skip;
+    cine.onclick = skip;
+
+    cine.classList.remove('hidden');
+    cine.classList.add('armed');
+    requestAnimationFrame(() => cine.classList.add('show'));
+
+    // A beat that can be cut short by the skip button.
+    const beat = (ms) => new Promise((resolve) => {
+      const started = performance.now();
+      const tick = () => {
+        if (skipped || generation !== this.generation || performance.now() - started >= ms) resolve();
+        else requestAnimationFrame(tick);
+      };
+      tick();
+    });
+    const caption = (text) => {
+      const el = $('cineCaption');
+      el.textContent = text;
+      el.classList.add('show');
+    };
+
+    const kingPiece = this.pieces.get(analysis.kingSquare);
+    const kingAt = squareToWorld(analysis.kingSquare);
+    const loserName = CODEX[analysis.loser].k.name;
+
+    await beat(700);
+
+    // 1. Close in on the trapped king.
+    if (!skipped) {
+      this.stage.flyTo({
+        target: { x: kingAt.x, y: 0.72, z: kingAt.z },
+        radius: 4.6,
+        phi: 1.02,
+        theta: this.stage.spherical.theta + 0.5,
+      });
+      caption(`${loserName} is surrounded.`);
+      this.sfx.check();
+    }
+    await beat(1500);
+
+    // 2. Mark the attackers, one at a time.
+    if (!skipped) {
+      this.markers.clear();
+      this.markers.add(analysis.kingSquare, 'mateKing');
+      for (const square of analysis.checkers) {
+        this.markers.add(square, 'mateChecker');
+        const at = squareToWorld(square);
+        this.effects.ring(at, { color: 0xffd76a, life: 0.7, from: 0.3, to: 1.6, opacity: 0.9 });
+        this.effects.flash({ x: at.x, y: 0.8, z: at.z }, { color: 0xffe9b0, size: 2, life: 0.4 });
+        this.sfx.select();
+      }
+      const names = analysis.checkers
+        .map((sq) => CODEX[analysis.winner][typeOf(this.state.board[sq])].name);
+      caption(`${names.join(' and ')} holds the blade.`);
+    }
+    await beat(1400);
+
+    // 3. Cross out every square the king cannot use.
+    if (!skipped) {
+      caption('Every road out is closed.');
+      for (const escape of analysis.escapes) {
+        this.markers.add(escape.square, escape.reason === 'own' ? 'mateOwn' : 'mateBar',
+          { spin: Math.PI / 4 });
+        if (escape.reason !== 'own') {
+          this.markers.add(escape.square, 'mateBar', { spin: -Math.PI / 4 });
+          const at = squareToWorld(escape.square);
+          this.effects.ring(at, { color: 0xff3b47, life: 0.5, from: 0.6, to: 1.0, opacity: 0.7 });
+        }
+        this.sfx.click();
+        await beat(180);
+      }
+    }
+    await beat(600);
+
+    // 4. The king gives out.
+    if (!skipped && kingPiece) {
+      caption(`${loserName} has nowhere left to stand.`);
+      await this.animator.play(buildDefeatAnimation({
+        piece: kingPiece, effects: this.effects, audio: this.sfx,
+      }));
+    } else if (kingPiece) {
+      kingPiece.userData.idle = null;
+    }
+    await beat(400);
+
+    // 5. Title card.
+    $('cineCaption').classList.remove('show');
+    $('cineTitle').textContent = status.result === 'draw' ? 'STALEMATE' : 'CHECKMATE';
+    $('cineTitle').classList.add('show');
+    this.sfx.shatter();
+    this.effects.shake(0.3);
+    await beat(1600);
+
+    if (generation !== this.generation) return;   // a new game started meanwhile
+    this._endCheckmateScene();
+  }
+
+  _endCheckmateScene() {
+    const cine = $('cinematic');
+    cine.classList.remove('show', 'armed');
+    cine.onclick = null;
+    setTimeout(() => {
+      cine.classList.add('hidden');
+      $('cineTitle').classList.remove('show');
+      $('cineCaption').classList.remove('show');
+    }, 700);
+
+    this.stage.releaseCamera();
+    this.stage.faceSide(this.bottomColor());
+    this.showMateBreakdown();
+  }
+
+  /** The screen after the scene: the position, marked up and explained. */
+  showMateBreakdown() {
+    const analysis = this.mateAnalysis;
+    const result = this.mateResult;
+    if (!analysis || !result) return;
+
+    this.hud.renderMateBoard(this.state.board, analysis);
+
+    const notes = [];
+    for (const square of analysis.checkers) {
+      const type = typeOf(this.state.board[square]);
+      const entry = CODEX[analysis.winner][type];
+      notes.push([`${entry.name} — the `, PIECE_NAMES[type], ` on `, squareName(square),
+        ` — attacks the king and cannot be taken or blocked.`]);
+    }
+
+    const covered = analysis.escapes.filter((e) => e.reason !== 'own');
+    const blocked = analysis.escapes.filter((e) => e.reason === 'own');
+    if (covered.length) {
+      const guards = [...new Set(covered.flatMap((e) => e.by))].map(squareName);
+      notes.push([
+        `The king cannot step to `,
+        covered.map((e) => squareName(e.square)).join(', '),
+        covered.length === 1 ? ` — that square is covered by ` : ` — those squares are covered by `,
+        guards.join(', '), `.`,
+      ]);
+    }
+    if (blocked.length) {
+      notes.push([
+        blocked.length === 1 ? `His own piece blocks ` : `His own pieces block `,
+        blocked.map((e) => squareName(e.square)).join(', '), `.`,
+      ]);
+    }
+    notes.push([`No piece can capture the attacker or step into the line, so the game ends here.`]);
+
+    this.hud.showMateScreen({
+      title: result.title,
+      subtitle: result.text,
+      mark: result.mark,
+      notes,
+      canRematch: result.canRematch,
+    });
   }
 
   requestRematch() {
@@ -1078,8 +1332,10 @@ class Chessforge {
 
   /** Remote moves may land mid-animation; play them in order. */
   async _queueRemoteMove(move) {
+    const generation = this.generation;
     this.remoteQueue = (this.remoteQueue || Promise.resolve()).then(async () => {
       while (this.busy) await new Promise((r) => setTimeout(r, 40));
+      if (generation !== this.generation || this.gameOver) return;
       await this.commitMove(move);
     });
     return this.remoteQueue;
@@ -1180,6 +1436,18 @@ class Chessforge {
   }
 
   _resume() {
+    // Loading a save replaces whatever is on the board. Refuse outright if a
+    // match is under way — an online game is never in local storage, so this
+    // would silently swap a live match for an old one.
+    if (this.inOnlineGame) {
+      this.hud.toast('You are in an online match — tap Return to game');
+      return;
+    }
+    if (this.inProgress) {
+      this.hud.toast('A match is already under way — tap Return to game');
+      return;
+    }
+
     let save;
     try { save = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { save = null; }
     if (!save?.state) { this.hud.toast('No saved game found'); return; }

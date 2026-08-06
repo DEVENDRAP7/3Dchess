@@ -173,6 +173,11 @@ const MARKER_STYLES = {
   lastTo: { color: HIGHLIGHT.lastMove, kind: 'square', opacity: 0.45 },
   check: { color: HIGHLIGHT.check, kind: 'ring', opacity: 1 },
   hint: { color: HIGHLIGHT.select, kind: 'square', opacity: 0.35 },
+  // Checkmate breakdown
+  mateKing: { color: HIGHLIGHT.check, kind: 'square', opacity: 0.55 },
+  mateChecker: { color: 0xffd76a, kind: 'ring', opacity: 1 },
+  mateBar: { color: HIGHLIGHT.check, kind: 'bar', opacity: 0.9 },
+  mateOwn: { color: 0x9aa4bd, kind: 'square', opacity: 0.4 },
 };
 
 export class Markers {
@@ -188,6 +193,8 @@ export class Markers {
       ring: new THREE.RingGeometry(0.36, 0.46, 28),
       dot: new THREE.CircleGeometry(0.15, 20),
       square: new THREE.PlaneGeometry(0.98, 0.98),
+      // One arm of the cross drawn over an escape square the king cannot use.
+      bar: new THREE.PlaneGeometry(0.66, 0.11),
     };
   }
 
@@ -213,7 +220,7 @@ export class Markers {
     this.active.length = 0;
   }
 
-  add(square, style) {
+  add(square, style, options = {}) {
     const spec = MARKER_STYLES[style];
     if (!spec) return null;
     const marker = this._acquire();
@@ -223,6 +230,7 @@ export class Markers {
     const pos = squareToWorld(square);
     marker.position.set(pos.x, 0.062 + (spec.kind === 'square' ? 0 : 0.002), pos.z);
     marker.scale.setScalar(1);
+    if (options.spin !== undefined) marker.rotation.z = options.spin;
     marker.userData.style = style;
     marker.userData.baseOpacity = spec.opacity;
     return marker;
@@ -241,6 +249,12 @@ export class Markers {
         marker.scale.setScalar(1 + Math.sin(time * 3.4) * 0.05);
       } else if (style === 'move' || style === 'capture') {
         marker.scale.setScalar(1 + Math.sin(time * 3 + marker.position.x) * 0.08);
+      } else if (style === 'mateChecker') {
+        const pulse = 0.5 + 0.5 * Math.sin(time * 5);
+        marker.material.opacity = 0.6 + pulse * 0.4;
+        marker.scale.setScalar(1 + pulse * 0.12);
+      } else if (style === 'mateKing') {
+        marker.material.opacity = 0.4 + 0.3 * Math.sin(time * 6);
       }
     }
   }

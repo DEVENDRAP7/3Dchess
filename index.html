@@ -52,7 +52,14 @@
         <button class="btn ghost small" data-nav="codex"><span class="btn-icon">📖</span>Codex</button>
         <button class="btn ghost small" data-nav="settings"><span class="btn-icon">⚙</span>Settings</button>
       </div>
-      <button class="btn ghost small hidden" id="resumeBtn"><span class="btn-icon">▸</span>Resume game</button>
+      <!-- Returning to a game already in progress is a different action from
+           loading a saved one, and must never be confused with it. -->
+      <button class="btn primary hidden" id="backToGameBtn">
+        <span class="btn-icon">▸</span>
+        <span><strong>Return to game</strong><small id="backToGameNote">Your match is still going</small></span>
+      </button>
+      <button class="btn ghost small hidden" id="resumeBtn"><span class="btn-icon">↺</span>Resume saved game</button>
+      <button class="btn ghost small hidden" id="leaveGameBtn"><span class="btn-icon">✕</span>Leave current match</button>
     </div>
 
     <!-- Computer / local setup -->
@@ -247,6 +254,46 @@
     <h2>Your soldier has reached the far rank</h2>
     <p class="hint-text">Choose what they become.</p>
     <div class="promo-grid" id="promoGrid"></div>
+  </div>
+</div>
+
+<!-- ── Checkmate cinematic ─────────────────────────────────────────────── -->
+<div id="cinematic" class="cinematic hidden" aria-hidden="true">
+  <div class="cine-vignette"></div>
+  <div class="cine-bar top"></div>
+  <div class="cine-bar bottom"></div>
+  <div class="cine-caption" id="cineCaption"></div>
+  <div class="cine-title" id="cineTitle">CHECKMATE</div>
+  <button class="btn ghost small cine-skip" id="cineSkip">Skip ▸</button>
+</div>
+
+<!-- ── How the mate works ──────────────────────────────────────────────── -->
+<div id="mateScreen" class="overlay hidden">
+  <div class="menu-card mate-card">
+    <header class="mate-head">
+      <span class="mate-mark" id="mateMark">♚</span>
+      <div>
+        <h2 id="mateTitle">Checkmate</h2>
+        <p class="hint-text" id="mateSubtitle">—</p>
+      </div>
+    </header>
+
+    <div class="mate-board" id="mateBoard" aria-label="Final position"></div>
+
+    <div class="mate-legend">
+      <span><i class="sw checker"></i>Delivers mate</span>
+      <span><i class="sw king"></i>Trapped king</span>
+      <span><i class="sw covered"></i>Covered escape</span>
+      <span><i class="sw own"></i>Own piece in the way</span>
+    </div>
+
+    <ul class="mate-notes" id="mateNotes"></ul>
+
+    <div class="menu-row">
+      <button class="btn primary" id="mateRematchBtn">Rematch</button>
+      <button class="btn ghost" id="mateMenuBtn">Main menu</button>
+    </div>
+    <p class="hint-text hidden" id="mateRematchNote"></p>
   </div>
 </div>
 

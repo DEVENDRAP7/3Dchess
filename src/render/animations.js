@@ -397,4 +397,62 @@ export function buildPromotionAnimation(ctx) {
   return { duration, update, events, done, swapAt: 0.45 };
 }
 
+/**
+ * The mated king gives out: knees buckle, the sword arm falls, the head bows
+ * and the whole figure sinks. Slow — this is the beat the game has been
+ * building to.
+ */
+export function buildDefeatAnimation(ctx) {
+  const { piece, effects, audio } = ctx;
+  const pal = PALETTE[piece.userData.color];
+  const groups = piece.userData.groups;
+  const baseY = piece.position.y;
+  const duration = 2.4;
+
+  // The king stops breathing and idling for good.
+  piece.userData.idle = null;
+
+  const events = [
+    {
+      at: 0.30,
+      fn: () => {
+        audio?.impact('k');
+        effects.dust(piece.position, { count: 18, speed: 1.2, color: pal.stoneDark });
+      },
+    },
+    {
+      at: 0.62,
+      fn: () => {
+        // The crown comes off — scattered as light rather than modelled loose.
+        effects.burst({ x: piece.position.x, y: baseY + 1.25, z: piece.position.z }, {
+          count: 26, color: [pal.trim, pal.gem], speed: 1.9, size: 0.11,
+          life: 1.4, spread: 1.2, gravity: -2.2, intensity: 1.3,
+        });
+        effects.ring(piece.position, { color: 0xff3b47, life: 1.0, from: 0.3, to: 2.4, opacity: 0.8 });
+        effects.shake(0.24);
+        audio?.defeat();
+      },
+    },
+  ];
+
+  const update = (k) => {
+    const fall = easeInOutCubic(Math.min(1, k / 0.72));
+    // Sink and pitch forward onto one knee.
+    piece.position.y = baseY - fall * 0.18;
+    if (groups.body) {
+      groups.body.rotation.x = fall * 0.42;
+      groups.body.rotation.z = Math.sin(k * 5) * 0.03 * (1 - fall);
+    }
+    if (groups.head) {
+      groups.head.rotation.x = fall * 0.55;      // head bowed
+      groups.head.rotation.y = fall * 0.18;
+    }
+    if (groups.armR) groups.armR.rotation.x = fall * 0.9;   // sword arm drops
+    if (groups.armL) groups.armL.rotation.x = fall * 0.6;
+    if (groups.cape) groups.cape.rotation.x = -fall * 0.3;
+  };
+
+  return { duration, update, events };
+}
+
 export { easeOutCubic, easeInOutCubic, easeOutBack, lerpAngle };

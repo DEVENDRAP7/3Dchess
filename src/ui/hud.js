@@ -197,6 +197,74 @@ export class Hud {
     });
   }
 
+  // -- checkmate breakdown --------------------------------------------------
+
+  /**
+   * Draws the final position as a flat diagram, marked up so the mate reads at
+   * a glance: who delivers it, where the king is, and every square he cannot
+   * step to. Always drawn with rank 1 at the bottom, like a printed board.
+   */
+  renderMateBoard(board, analysis) {
+    const grid = $('mateBoard');
+    grid.textContent = '';
+    const checkers = new Set(analysis.checkers);
+    const covered = new Map(analysis.escapes.map((e) => [e.square, e.reason]));
+
+    for (let rank = 7; rank >= 0; rank--) {
+      for (let file = 0; file < 8; file++) {
+        const index = rank * 8 + file;
+        const cell = document.createElement('div');
+        cell.className = 'sq ' + ((file + rank) % 2 === 1 ? 'light' : 'dark');
+
+        if (index === analysis.kingSquare) cell.classList.add('king');
+        else if (checkers.has(index)) cell.classList.add('checker');
+        else if (covered.has(index)) cell.classList.add(covered.get(index) === 'own' ? 'own' : 'covered');
+
+        const code = board[index];
+        if (code) {
+          const glyph = document.createElement('span');
+          const color = code === code.toUpperCase() ? 'w' : 'b';
+          glyph.className = 'g ' + color;
+          glyph.textContent = GLYPH[color][code.toLowerCase()];
+          cell.appendChild(glyph);
+        }
+        grid.appendChild(cell);
+      }
+    }
+  }
+
+  showMateScreen({ title, subtitle, mark, notes, canRematch }) {
+    $('mateMark').textContent = mark;
+    $('mateTitle').textContent = title;
+    $('mateSubtitle').textContent = subtitle;
+
+    const list = $('mateNotes');
+    list.textContent = '';
+    for (const note of notes) {
+      const li = document.createElement('li');
+      // Notes arrive as [plain, emphasised, plain, …] so squares can be bolded
+      // without ever putting caller text through innerHTML.
+      note.forEach((part, i) => {
+        if (i % 2 === 1) {
+          const b = document.createElement('b');
+          b.textContent = part;
+          li.appendChild(b);
+        } else {
+          li.appendChild(document.createTextNode(part));
+        }
+      });
+      list.appendChild(li);
+    }
+
+    $('mateRematchBtn').classList.toggle('hidden', !canRematch);
+    $('mateRematchNote').classList.add('hidden');
+    $('mateScreen').classList.remove('hidden');
+  }
+
+  hideMateScreen() {
+    $('mateScreen').classList.add('hidden');
+  }
+
   // -- game over ------------------------------------------------------------
 
   showGameOver({ mark, title, text, canRematch = true, note = '' }) {
