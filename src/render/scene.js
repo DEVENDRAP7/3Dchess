@@ -54,6 +54,8 @@ export class Stage {
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.1, 120);
     this.target = new THREE.Vector3(0, 0.15, 0);
+    this.desiredTarget = this.target.clone();
+    this.homeTarget = this.target.clone();
 
     // Camera lives on a sphere around the board.
     this.spherical = { radius: 12.5, theta: 0, phi: 0.86 };
@@ -71,6 +73,7 @@ export class Stage {
     this.autoQuality = true;
     this.interacting = false;
     this.spin = 0;
+    this.cinematic = false;
     this.resize();
   }
 
@@ -168,10 +171,35 @@ export class Stage {
     this.portrait = portrait;
   }
 
+  /**
+   * Moves the camera somewhere specific for a cinematic. While `cinematic` is
+   * set the camera glides rather than snapping, and gestures are ignored.
+   */
+  flyTo({ target, radius, theta, phi }) {
+    this.cinematic = true;
+    this.spin = 0;
+    if (target) this.desiredTarget.set(target.x, target.y, target.z);
+    if (radius !== undefined) this.desired.radius = radius;
+    if (phi !== undefined) this.desired.phi = phi;
+    if (theta !== undefined) {
+      // Take the short way round from wherever the camera currently is.
+      const delta = ((theta - this.spherical.theta + Math.PI) % TAU) - Math.PI;
+      this.desired.theta = this.spherical.theta + delta;
+    }
+  }
+
+  /** Ends cinematic mode and hands the camera back to the player. */
+  releaseCamera() {
+    this.cinematic = false;
+    this.desiredTarget.copy(this.homeTarget);
+  }
+
   /** Points the camera from behind the given army. */
   faceSide(color, immediate = false) {
     // theta 0 puts the camera at +Z, which is behind White's home rank.
     this.spin = 0;
+    this.cinematic = false;
+    this.desiredTarget.copy(this.homeTarget);
     this.desired.theta = color === 'w' ? 0 : Math.PI;
     this.desired.phi = this.portrait ? 0.58 : 0.80;
     this.desired.radius = this.portrait ? 17.0 : 13.2;
@@ -179,6 +207,7 @@ export class Stage {
       this.spherical.theta = this.desired.theta;
       this.spherical.phi = this.desired.phi;
       this.spherical.radius = this.desired.radius;
+      this.target.copy(this.homeTarget);
     } else {
       // Always rotate the short way round.
       const delta = ((this.desired.theta - this.spherical.theta + Math.PI) % TAU) - Math.PI;
@@ -370,17 +399,21 @@ export class Stage {
       if (Math.abs(this.spin) < 0.0006) this.spin = 0;
     }
 
-    if (this.interacting) {
+    if (this.interacting && !this.cinematic) {
       // Under the finger the camera goes exactly where the gesture puts it.
       this.spherical.theta = this.desired.theta;
       this.spherical.phi = this.desired.phi;
       this.spherical.radius = this.desired.radius;
     } else {
-      const smoothing = 1 - Math.pow(0.0016, dt);
+      // A slower glide during a cinematic; the usual snap otherwise.
+      const rate = this.cinematic ? 0.16 : 0.0016;
+      const smoothing = 1 - Math.pow(rate, dt);
       this.spherical.theta += (this.desired.theta - this.spherical.theta) * smoothing;
       this.spherical.phi += (this.desired.phi - this.spherical.phi) * smoothing;
       this.spherical.radius += (this.desired.radius - this.spherical.radius) * smoothing;
     }
+    const targetRate = 1 - Math.pow(this.cinematic ? 0.16 : 0.002, dt);
+    this.target.lerp(this.desiredTarget, targetRate);
 
     const { radius, theta, phi } = this.spherical;
     const sinPhi = Math.sin(phi);

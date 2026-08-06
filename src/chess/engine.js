@@ -150,6 +150,104 @@ export function isSquareAttacked(state, square, byColor) {
   return false;
 }
 
+/**
+ * Every piece of `byColor` that attacks `square`, as a list of squares.
+ * Same sweep as {@link isSquareAttacked}, but collecting rather than short-
+ * circuiting, so the mate screen can point at exactly who is doing what.
+ */
+export function attackersOf(state, square, byColor) {
+  const board = state.board;
+  const f = fileOf(square);
+  const r = rankOf(square);
+  const white = byColor === WHITE;
+  const found = [];
+
+  const pawnRank = r + (white ? -1 : 1);
+  const pawn = white ? 'P' : 'p';
+  for (const df of [-1, 1]) {
+    const pf = f + df;
+    if (onBoard(pf, pawnRank) && board[idx(pf, pawnRank)] === pawn) found.push(idx(pf, pawnRank));
+  }
+
+  const knight = white ? 'N' : 'n';
+  for (const [df, dr] of KNIGHT_DELTAS) {
+    const nf = f + df, nr = r + dr;
+    if (onBoard(nf, nr) && board[idx(nf, nr)] === knight) found.push(idx(nf, nr));
+  }
+
+  const king = white ? 'K' : 'k';
+  for (const [df, dr] of KING_DELTAS) {
+    const nf = f + df, nr = r + dr;
+    if (onBoard(nf, nr) && board[idx(nf, nr)] === king) found.push(idx(nf, nr));
+  }
+
+  const queen = white ? 'Q' : 'q';
+  for (const [dirs, piece] of [[ROOK_DIRS, white ? 'R' : 'r'], [BISHOP_DIRS, white ? 'B' : 'b']]) {
+    for (const [df, dr] of dirs) {
+      let nf = f + df, nr = r + dr;
+      while (onBoard(nf, nr)) {
+        const at = idx(nf, nr);
+        const p = board[at];
+        if (p) {
+          if (p === piece || p === queen) found.push(at);
+          break;
+        }
+        nf += df; nr += dr;
+      }
+    }
+  }
+
+  return found;
+}
+
+/**
+ * Why the side to move is mated: who is giving check, and for each square the
+ * king might have stepped to, what stops it.
+ *
+ * The king is lifted off the board while testing escape squares, otherwise it
+ * blocks the very line that covers the square behind it.
+ */
+export function analyseMate(state) {
+  const loser = state.turn;
+  const winner = opponent(loser);
+  const kingSquare = findKing(state, loser);
+  if (kingSquare < 0) return null;
+
+  const checkers = attackersOf(state, kingSquare, winner);
+  const escapes = [];
+  const f = fileOf(kingSquare);
+  const r = rankOf(kingSquare);
+
+  const board = state.board;
+  const kingPiece = board[kingSquare];
+  board[kingSquare] = '';                      // lift the king to expose x-rays
+
+  for (const [df, dr] of KING_DELTAS) {
+    const nf = f + df, nr = r + dr;
+    if (!onBoard(nf, nr)) continue;
+    const to = idx(nf, nr);
+    const occupant = board[to];
+
+    if (occupant && colorOf(occupant) === loser) {
+      escapes.push({ square: to, reason: 'own', piece: occupant, by: [] });
+      continue;
+    }
+    // Defenders of an enemy piece still count: the king cannot take it either.
+    const saved = board[to];
+    board[to] = '';
+    const by = attackersOf(state, to, winner);
+    board[to] = saved;
+
+    if (by.length) {
+      escapes.push({ square: to, reason: occupant ? 'defended' : 'covered', piece: occupant, by });
+    }
+  }
+
+  board[kingSquare] = kingPiece;
+
+  return { loser, winner, kingSquare, checkers, escapes };
+}
+
 export function inCheck(state, color = state.turn) {
   const king = findKing(state, color);
   if (king < 0) return false;
