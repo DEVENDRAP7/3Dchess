@@ -97,6 +97,11 @@ class Chessforge {
     this.stage.scene.add(this.pieceGroup);
     this.stage.pickables = [this.pieceGroup];
     this.stage.onTap = (x, y) => this.onTap(x, y);
+    // Double-tap reframes the board — an easy way back from an odd angle.
+    this.stage.onDoubleTap = () => {
+      this.stage.faceSide(this.bottomColor());
+      this.hud.toast('View reset');
+    };
 
     await progress(92, 'Setting the pieces…');
     this._bindUi();
@@ -477,6 +482,15 @@ class Chessforge {
     this.legalForSelected = generateLegalMoves(this.state).filter((m) => m.from === square);
     this.hintMove = null;
     this.sfx.select();
+
+    // Name the character on selection — at board scale the models are small,
+    // and this saves squinting to work out which piece you just picked up.
+    const code = this.state.board[square];
+    if (code) {
+      const entry = CODEX[colorOf(code)][typeOf(code)];
+      const moves = this.legalForSelected.length;
+      this.hud.ticker(`${entry.name} · ${entry.rank} — ${moves} move${moves === 1 ? '' : 's'}`);
+    }
     const piece = this.pieces.get(square);
     if (piece) {
       this.effects.ring(piece.position, {
