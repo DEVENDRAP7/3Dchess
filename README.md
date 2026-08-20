@@ -1,5 +1,11 @@
 # Chessforge — 3D Character Chess
 
+### ▶ [**Play it here — devendrap7.github.io/3Dchess**](https://devendrap7.github.io/3Dchess/)
+
+Open it on your phone. Nothing to install.
+
+---
+
 A 3D chess game for phones, built to run straight from GitHub Pages. Every
 piece is a character: a full armoured figure with its own costume, helm or
 crown, personality, idle behaviour, and a signature way of moving and killing.
@@ -33,9 +39,15 @@ closing the tab doesn't lose your position.
 ### Playing a friend online
 
 One player taps **Create a room** and gets a code like `K7QMP`. The other taps
-**Join** and types it, or just opens the invite link. After that the two
-browsers talk to each other directly over WebRTC — moves never pass through a
-server, because there isn't one.
+**Join** and types it, or just opens the invite link — which is simply the site
+URL with the code on the end:
+
+```
+https://devendrap7.github.io/3Dchess/?room=K7QMP
+```
+
+After that the two browsers talk to each other directly over WebRTC — moves
+never pass through a server, because there isn't one.
 
 Both sides run the full rules engine and validate everything they receive, so a
 modified client can't force an illegal move onto your board.
@@ -49,14 +61,15 @@ and computer games are unaffected.
 
 ## Hosting it
 
-The repository *is* the site. Nothing needs compiling.
+This repo is already published at
+**<https://devendrap7.github.io/3Dchess/>** — `.github/workflows/pages.yml`
+redeploys it on every push to `main`.
 
+To host your own copy, the repository *is* the site; nothing needs compiling.
 **One manual step is required, and only once:** in **Settings → Pages**, set
 **Source** to **GitHub Actions**. The workflow token is not permitted to turn
-Pages on by itself, so the first run fails until you do this.
-
-After that, `.github/workflows/pages.yml` publishes on every push and the site
-lives at `https://<user>.github.io/<repo>/`.
+Pages on by itself, so the first run fails until you do. After that it
+publishes on every push, at `https://<user>.github.io/<repo>/`.
 
 To run it locally, serve the folder over HTTP — ES modules and the AI worker
 won't load from `file://`:
