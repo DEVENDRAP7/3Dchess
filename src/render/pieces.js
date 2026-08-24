@@ -21,6 +21,66 @@ const T = FINISH.METAL;
 const E = FINISH.GLOW;
 const TAU = Math.PI * 2;
 
+// ---------------------------------------------------------------------------
+// Nameplate icons — a small badge that floats over every character's head so
+// its role reads at a glance, the way a unit marker does in a strategy game.
+// ---------------------------------------------------------------------------
+
+const ICON_GLYPH = {
+  w: { p: '♙', n: '♘', b: '♗', r: '♖', q: '♕', k: '♔' },
+  b: { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' },
+};
+
+let iconMaterials = null;
+
+function buildIconMaterials() {
+  if (iconMaterials) return iconMaterials;
+  iconMaterials = {};
+  for (const color of ['w', 'b']) {
+    const pal = PALETTE[color];
+    const ring = '#' + pal.trim.toString(16).padStart(6, '0');
+    const disc = color === 'w' ? 'rgba(24,22,16,0.78)' : 'rgba(238,232,248,0.85)';
+    const ink = color === 'w' ? '#f6ecd6' : '#201f28';
+    iconMaterials[color] = {};
+    for (const type of ['p', 'n', 'b', 'r', 'q', 'k']) {
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, size * 0.42, 0, TAU);
+      ctx.fillStyle = disc;
+      ctx.fill();
+      ctx.lineWidth = size * 0.05;
+      ctx.strokeStyle = ring;
+      ctx.stroke();
+
+      ctx.fillStyle = ink;
+      ctx.font = `${Math.round(size * 0.60)}px "Segoe UI Symbol", "Noto Sans Symbols", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ICON_GLYPH[color][type], size / 2, size * 0.55);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      iconMaterials[color][type] = new THREE.SpriteMaterial({
+        map: texture, transparent: true, depthWrite: false, toneMapped: false,
+      });
+    }
+  }
+  return iconMaterials;
+}
+
+/** A camera-facing badge showing what a character is, hovering above its head. */
+function buildRoleIcon(color, type) {
+  const sprite = new THREE.Sprite(buildIconMaterials()[color][type]);
+  sprite.scale.setScalar(0.34);
+  sprite.position.y = PIECE_HEIGHT[type] + 0.24;
+  sprite.renderOrder = 3;
+  return sprite;
+}
+
 /**
  * Working height each character is authored at, and the height it is finally
  * normalised to on the board. Authoring and final size are kept separate so a
@@ -636,6 +696,7 @@ export function spawnPiece(prototypes, color, type) {
 
   const container = new THREE.Group();
   container.add(model);
+  container.add(buildRoleIcon(color, type));
   // The container carries the army facing — move animations swing it toward the
   // direction of travel and settle it back. The model only carries the fixed
   // stylistic turn; putting the facing here too would compound the two and send
