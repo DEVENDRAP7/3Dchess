@@ -80,7 +80,11 @@ export function cloneState(state) {
 /** Compact key describing a position for threefold-repetition bookkeeping. */
 export function positionKey(state) {
   const c = state.castling;
-  return state.board.join('') + '|' + state.turn + '|' +
+  // Empty squares must leave a mark — otherwise join('') drops them entirely
+  // and two boards with the same pieces in a different arrangement collide.
+  let board = '';
+  for (let i = 0; i < 64; i++) board += state.board[i] || '.';
+  return board + '|' + state.turn + '|' +
     (c.K ? 'K' : '') + (c.Q ? 'Q' : '') + (c.k ? 'k' : '') + (c.q ? 'q' : '') + '|' + state.ep;
 }
 
